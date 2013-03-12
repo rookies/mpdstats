@@ -113,7 +113,7 @@ class StatsCollector (object):
 		print(song)
 	def elapse (self):
 		self.elapsed += 1
-		if self.duration != 0 and self.elapsed == round(self.duration/2.) and self.songid != self.logged_songid:
+		if self.duration != 0 and self.elapsed > round(self.duration/2.) and self.songid != self.logged_songid:
 			self.scrobble(self.song_fancy)
 			self.logged_songid = self.songid
 		self.init_timer()
