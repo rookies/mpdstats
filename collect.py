@@ -19,21 +19,49 @@
 #  MA 02110-1301, USA.
 #  
 #
-import sys
+import sys, threading
 import libs.mpd as mpd
 
 class StatsCollector (object):
 	client = None
+	songid = -1
+	logged_songid = -1
+	elapsed = 0
+	duration = 0
+	song_fancy = None
 	
 	def __init__ (self, host="localhost", port=6600, timeout=None, password=None):
+		## Connect to mpd:
 		self.client = mpd.MPDClient()
 		self.client.timeout = timeout
 		self.client.connect(host, port)
 		if password is not None:
 			self.client.password(password)
+		## Init timer:
+		self.init_timer()
 	def __del__ (self):
 		self.client.disconnect()
-	def getsong (self):
+	def init_timer (self):
+		self.timer = threading.Timer(1., self.elapse)
+	def getstatus_state (self):
+		## Get status:
+		res = self.client.status()
+		## Return state:
+		return res["state"]
+	def getstatus_time (self):
+		## Get status:
+		res = self.client.status()
+		## Return time:
+		return {
+			"elapsed": int(res["time"].split(":")[0]),
+			"duration": int(res["time"].split(":")[1])
+		}
+	def getsong_id (self):
+		## Get current song:
+		res = self.client.currentsong()
+		## Return ID:
+		return int(res["id"])
+	def getsong_fancy (self):
 		## Get current song:
 		res = self.client.currentsong()
 		## Check if title and artist are set:
@@ -43,7 +71,8 @@ class StatsCollector (object):
 		## Create return array:
 		ret = {
 			"title": res["title"],
-			"artist": res["artist"]
+			"artist": res["artist"],
+			"duration": int(res["time"])
 		}
 		## Set album title:
 		if "album" in res:
@@ -66,7 +95,7 @@ class StatsCollector (object):
 				except:
 					pass
 				try:
-					ret["trackall"] = int(tmp[1])
+					ret["tracks"] = int(tmp[1])
 				except:
 					pass
 			else:
@@ -76,14 +105,47 @@ class StatsCollector (object):
 					pass
 		## Return the result:
 		return ret
+	def log (self, msg):
+		print(msg, file=sys.stderr)
 	def wait (self):
 		self.client.idle("player")
+	def scrobble (self, song):
+		print(song)
+	def elapse (self):
+		self.elapsed += 1
+		if self.duration != 0 and self.elapsed == round(self.duration/2.) and self.songid != self.logged_songid:
+			self.scrobble(self.song_fancy)
+			self.logged_songid = self.songid
+		self.init_timer()
+		self.timer.start()
+	def run (self):
+		state = self.getstatus_state()
+		if state == "play":
+			self.log("Play state received.")
+			t = self.getstatus_time()
+			self.elapsed = t["elapsed"]
+			self.duration = t["duration"]
+			self.songid = self.getsong_id()
+			self.song_fancy = self.getsong_fancy()
+			self.timer.cancel()
+			self.init_timer()
+			self.timer.start()
+		elif state == "stop":
+			self.log("Stop state received.")
+			self.elapsed = 0
+			self.timer.cancel()
+		elif state == "pause":
+			self.log("Pause state received.")
+			self.elapsed = self.getstatus_time()["elapsed"]
+			self.songid = self.getsong_id()
+			self.song_fancy = self.getsong_fancy()
+			self.timer.cancel()
+		self.wait()
 
 if __name__ == "__main__":
 	c = StatsCollector()
 	try:
 		while True:
-			print(c.getsong())
-			c.wait()
+			c.run()
 	except KeyboardInterrupt:
 		sys.exit(0)
