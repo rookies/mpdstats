@@ -96,6 +96,8 @@ class StatsCollector (object):
 				ret["date"] = int(res["date"])
 			except:
 				ret["date"] = 0
+		else:
+			ret["date"] = 0
 		## Set track:
 		if "track" in res:
 			if res["track"].find("/"):
@@ -114,6 +116,9 @@ class StatsCollector (object):
 					ret["track"] = int(res["track"])
 				except:
 					ret["track"] = 0
+		else:
+			ret["track"] = 0
+			ret["tracks"] = 0
 		## Return the result:
 		return ret
 	def log (self, msg):
