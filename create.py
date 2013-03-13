@@ -61,6 +61,7 @@ if __name__ == "__main__":
 		FROM
 			`scrobbles`
 		GROUP BY
+			`artist`,
 			`title`
 		ORDER BY
 			`count` DESC
@@ -78,6 +79,7 @@ if __name__ == "__main__":
 		WHERE
 			`album` != ''
 		GROUP BY
+			`artist`,
 			`album`
 		ORDER BY
 			`count` DESC
