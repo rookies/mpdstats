@@ -21,6 +21,7 @@
 #
 import sys, threading, time
 import libs.mpd as mpd
+import libs.config as config
 import pyodbc
 
 class StatsCollector (object):
@@ -32,10 +33,10 @@ class StatsCollector (object):
 	duration = 0
 	song_fancy = None
 	
-	def __init__ (self, db, host="localhost", port=6600, timeout=None, password=None):
+	def __init__ (self, db, host="localhost", port=6600, password=None):
 		## Connect to mpd:
 		self.client = mpd.MPDClient()
-		self.client.timeout = timeout
+		self.client.timeout = None
 		self.client.connect(host, port)
 		if password is not None:
 			self.client.password(password)
@@ -201,7 +202,12 @@ class StatsCollector (object):
 		self.wait()
 
 if __name__ == "__main__":
-	c = StatsCollector("driver=mysql1;server=localhost;database=mpdstats;uid=root;pwd=password")
+	c = StatsCollector(
+		config.database,
+		config.mpd_host,
+		config.mpd_port,
+		config.mpd_password
+	)
 	try:
 		while True:
 			c.run()
