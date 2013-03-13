@@ -20,5 +20,11 @@
 				{{ artist }} - {{ title }} ({{ count }})
 			</li>{% endfor %}
 		</ol>
+		<h2>Top Albums</h2>
+		<ol>
+			{% for count, artist, album in albums %}<li>
+				{{ artist }} - {{ album }} ({{ count }})
+			</li>{% endfor %}
+		</ol>
 	</body>
 </html>

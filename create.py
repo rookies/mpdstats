@@ -67,6 +67,23 @@ if __name__ == "__main__":
 		LIMIT
 			0, 15
 	""").fetchall()
+	## Get albums:
+	albums = cursor.execute("""
+		SELECT
+			COUNT(`id`) AS `count`,
+			`artist`,
+			`album`
+		FROM
+			`scrobbles`
+		WHERE
+			`album` != ''
+		GROUP BY
+			`album`
+		ORDER BY
+			`count` DESC
+		LIMIT
+			0, 15
+	""").fetchall()
 	## Load template:
 	tpl = env.get_template("index.html")
 	## ... and render it:
@@ -74,7 +91,8 @@ if __name__ == "__main__":
 	f.write(tpl.render(
 		date=time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime()),
 		artists=artists,
-		songs=songs
+		songs=songs,
+		albums=albums
 	))
 	f.close()
 	print("Creating index.html... DONE", file=sys.stderr)
