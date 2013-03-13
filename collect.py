@@ -19,24 +19,28 @@
 #  MA 02110-1301, USA.
 #  
 #
-import sys, threading
+import sys, threading, time
 import libs.mpd as mpd
+import pyodbc
 
 class StatsCollector (object):
 	client = None
+	db = None
 	songid = -1
 	logged_songid = -1
 	elapsed = 0
 	duration = 0
 	song_fancy = None
 	
-	def __init__ (self, host="localhost", port=6600, timeout=None, password=None):
+	def __init__ (self, db, host="localhost", port=6600, timeout=None, password=None):
 		## Connect to mpd:
 		self.client = mpd.MPDClient()
 		self.client.timeout = timeout
 		self.client.connect(host, port)
 		if password is not None:
 			self.client.password(password)
+		## Connect to database:
+		self.db = pyodbc.connect(db)
 		## Init timer:
 		self.init_timer()
 	def __del__ (self):
@@ -72,20 +76,25 @@ class StatsCollector (object):
 		ret = {
 			"title": res["title"],
 			"artist": res["artist"],
-			"duration": int(res["time"])
+			"duration": int(res["time"]),
+			"songid": int(res["id"])
 		}
 		## Set album title:
 		if "album" in res:
 			ret["album"] = res["album"]
+		else:
+			ret["album"] = ""
 		## Set genre:
 		if "genre" in res:
 			ret["genre"] = res["genre"]
+		else:
+			ret["genre"] = ""
 		## Set date:
 		if "date" in res:
 			try:
 				ret["date"] = int(res["date"])
 			except:
-				pass
+				ret["date"] = 0
 		## Set track:
 		if "track" in res:
 			if res["track"].find("/"):
@@ -93,16 +102,17 @@ class StatsCollector (object):
 				try:
 					ret["track"] = int(tmp[0])
 				except:
-					pass
+					ret["track"] = 0
 				try:
 					ret["tracks"] = int(tmp[1])
 				except:
-					pass
+					ret["tracks"] = 0
 			else:
+				ret["tracks"] = 0
 				try:
 					ret["track"] = int(res["track"])
 				except:
-					pass
+					ret["track"] = 0
 		## Return the result:
 		return ret
 	def log (self, msg):
@@ -110,7 +120,55 @@ class StatsCollector (object):
 	def wait (self):
 		self.client.idle("player")
 	def scrobble (self, song):
-		print(song)
+		cursor = self.db.cursor()
+		## Get last scrobbled song:
+		row = cursor.execute("""
+			SELECT
+				`title`,
+				`artist`,
+				`duration`,
+				`songid`
+			FROM
+				`scrobbles`
+			ORDER BY
+				`id` DESC
+			LIMIT
+				1
+		""").fetchone()
+		## Check if the same is playing now:
+		if row is None or row[0] != song["title"] or row[1] != song["artist"] or row[2] != song["duration"] or row[3] != song["songid"]:
+			## It's not the same, so write to database:
+			cursor.execute("""
+				INSERT INTO
+					`scrobbles`
+				SET
+					`time` = ?,
+					`title` = ?,
+					`artist` = ?,
+					`duration` = ?,
+					`album` = ?,
+					`genre` = ?,
+					`date` = ?,
+					`track` = ?,
+					`tracks` = ?,
+					`songid` = ?
+			""", (
+				time.mktime(time.gmtime()),
+				song["title"],
+				song["artist"],
+				song["duration"],
+				song["album"],
+				song["genre"],
+				song["date"],
+				song["track"],
+				song["tracks"],
+				song["songid"],
+			))
+			self.log("Scrobbled %s" % str(song))
+			cursor.commit()
+		else:
+			self.log("Ignored %s" % str(song))
+		cursor.close()
 	def elapse (self):
 		self.elapsed += 1
 		if self.duration != 0 and self.elapsed > round(self.duration/2.) and self.songid != self.logged_songid:
@@ -143,7 +201,7 @@ class StatsCollector (object):
 		self.wait()
 
 if __name__ == "__main__":
-	c = StatsCollector()
+	c = StatsCollector("driver=mysql1;server=localhost;database=mpdstats;uid=root;pwd=password")
 	try:
 		while True:
 			c.run()
