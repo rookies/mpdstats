@@ -36,8 +36,9 @@ if __name__ == "__main__":
 	db = pyodbc.connect(config.database)
 	cursor = db.cursor()
 	print("Opening database connection... DONE", file=sys.stderr)
-	## Get artists:
+	## === OVERVIEW ===
 	print("Creating index.html...", file=sys.stderr)
+	## Get artists:
 	artists = cursor.execute("""
 		SELECT
 			COUNT(`id`) AS `count`,
@@ -48,13 +49,32 @@ if __name__ == "__main__":
 			`artist`
 		ORDER BY
 			`count` DESC
+		LIMIT
+			0, 15
 	""").fetchall()
-	## Render:
+	## Get songs:
+	songs = cursor.execute("""
+		SELECT
+			COUNT(`id`) AS `count`,
+			`artist`,
+			`title`
+		FROM
+			`scrobbles`
+		GROUP BY
+			`title`
+		ORDER BY
+			`count` DESC
+		LIMIT
+			0, 15
+	""").fetchall()
+	## Load template:
 	tpl = env.get_template("index.html")
+	## ... and render it:
 	f = open("output/index.html", "w")
 	f.write(tpl.render(
 		date=time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime()),
-		artists=artists
+		artists=artists,
+		songs=songs
 	))
 	f.close()
 	print("Creating index.html... DONE", file=sys.stderr)
