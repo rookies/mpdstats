@@ -8,19 +8,19 @@
 	<body>
 		<h1>MPDstats</h1>
 		<h2>Created: {{ date }}</h2>
-		<h2>Top Artists</h2>
+		<h2>Top Artists ({{ artists|length }} of {{ all_artists }})</h2>
 		<ol>
 			{% for count, artist in artists %}<li>
 				{{ artist }} ({{ count }})
 			</li>{% endfor %}
 		</ol>
-		<h2>Top Songs</h2>
+		<h2>Top Songs ({{ songs|length }} of {{ all_songs }})</h2>
 		<ol>
 			{% for count, artist, title in songs %}<li>
 				{{ artist }} - {{ title }} ({{ count }})
 			</li>{% endfor %}
 		</ol>
-		<h2>Top Albums</h2>
+		<h2>Top Albums ({{ albums|length }} of {{ all_albums }})</h2>
 		<ol>
 			{% for count, artist, album in albums %}<li>
 				{{ artist }} - {{ album }} ({{ count }})

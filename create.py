@@ -52,6 +52,14 @@ if __name__ == "__main__":
 		LIMIT
 			0, 15
 	""").fetchall()
+	all_artists = len(cursor.execute("""
+		SELECT
+			`artist`
+		FROM
+			`scrobbles`
+		GROUP BY
+			`artist`
+	""").fetchall())
 	## Get songs:
 	songs = cursor.execute("""
 		SELECT
@@ -68,6 +76,15 @@ if __name__ == "__main__":
 		LIMIT
 			0, 15
 	""").fetchall()
+	all_songs = len(cursor.execute("""
+		SELECT
+			`title`
+		FROM
+			`scrobbles`
+		GROUP BY
+			`artist`,
+			`title`
+	""").fetchall())
 	## Get albums:
 	albums = cursor.execute("""
 		SELECT
@@ -86,6 +103,17 @@ if __name__ == "__main__":
 		LIMIT
 			0, 15
 	""").fetchall()
+	all_albums = len(cursor.execute("""
+		SELECT
+			`album`
+		FROM
+			`scrobbles`
+		WHERE
+			`album` != ''
+		GROUP BY
+			`artist`,
+			`album`
+	""").fetchall())
 	## Load template:
 	tpl = env.get_template("index.html")
 	## ... and render it:
@@ -93,8 +121,11 @@ if __name__ == "__main__":
 	f.write(tpl.render(
 		date=time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime()),
 		artists=artists,
+		all_artists=all_artists,
 		songs=songs,
-		albums=albums
+		all_songs=all_songs,
+		albums=albums,
+		all_albums=all_albums
 	))
 	f.close()
 	print("Creating index.html... DONE", file=sys.stderr)
