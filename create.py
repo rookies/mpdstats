@@ -19,13 +19,17 @@
 #  MA 02110-1301, USA.
 #  
 #
-import time, sys, os.path
-import libs.config as config
+import time, sys, os.path, argparse
 import pyodbc
 from jinja2 import Template, FileSystemLoader
 from jinja2.environment import Environment
 
 if __name__ == "__main__":
+	## Parse command line arguments:
+	parser = argparse.ArgumentParser(description='Logger daemon for MPDstats')
+	parser.add_argument('-d', '--database', help="The database string to use.", required=True)
+	args = parser.parse_args()
+	## Get maindir:
 	maindir = os.path.dirname(sys.argv[0])
 	## Init template engine:
 	print("Initializing template engine...", file=sys.stderr)
@@ -34,7 +38,7 @@ if __name__ == "__main__":
 	print("Initializing template engine... DONE", file=sys.stderr)
 	## Open database connection:
 	print("Opening database connection...", file=sys.stderr)
-	db = pyodbc.connect(config.database)
+	db = pyodbc.connect(args.database)
 	cursor = db.cursor()
 	print("Opening database connection... DONE", file=sys.stderr)
 	## === OVERVIEW ===
