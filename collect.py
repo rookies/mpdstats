@@ -19,33 +19,121 @@
 #  MA 02110-1301, USA.
 #  
 #
-import sys, threading, time
+import threading, time, json, argparse, sys
 import libs.mpd as mpd
-import libs.config as config
 import pyodbc
 
 class StatsCollector (object):
+	## Connections & general settings:
+	config = None
+	mode = 0 # 0=cachefile, 1=database
 	client = None
 	db = None
+	cache = []
+	timer = None
+	## Status variables:
 	songid = -1
 	logged_songid = -1
 	elapsed = 0
 	duration = 0
 	song_fancy = None
-	
-	def __init__ (self, db, host="localhost", port=6600, password=None):
-		## Connect to mpd:
-		self.client = mpd.MPDClient()
-		self.client.timeout = None
-		self.client.connect(host, port)
-		if password is not None:
-			self.client.password(password)
-		## Connect to database:
-		self.db = pyodbc.connect(db)
-		## Init timer:
+
+	def __init__ (self):
 		self.init_timer()
 	def __del__ (self):
-		self.client.disconnect()
+		try:
+			self.client.disconnect()
+		except:
+			pass
+		if self.mode == 0:
+			try:
+				self.cache.close()
+			except:
+				pass
+		else:
+			try:
+				self.db.close()
+			except:
+				pass
+	def set_config (self, config):
+		## Check existence of all config keys:
+		if not "mpd" in config:
+			raise ValueError("Config key 'mpd' not found.")
+		if not isinstance(config["mpd"], dict):
+			raise ValueError("Config key 'mpd' has invalid type.")
+		if not "port" in config["mpd"]:
+			raise ValueError("Config key 'mpd.port' not found.")
+		if not "host" in config["mpd"]:
+			raise ValueError("Config key 'mpd.host' not found.")
+		if not "password" in config["mpd"]:
+			raise ValueError("Config key 'mpd.password' not found.")
+		if not "logfile" in config:
+			raise ValueError("Config key 'logfile' not found.")
+		if not "cachefile" in config:
+			raise ValueError("Config key 'cachefile' not found.")
+		if not "database" in config:
+			raise ValueError("Config key 'database' not found.")
+		## Check types of all config keys:
+		if not isinstance(config["mpd"]["port"], int):
+			raise ValueError("Config key 'mpd.port' has invalid type.")
+		if not isinstance(config["mpd"]["host"], str):
+			raise ValueError("Config key 'mpd.host' has invalid type.")
+		if not isinstance(config["mpd"]["password"], str) and config["mpd"]["password"] is not None:
+			raise ValueError("Config key 'mpd.password' has invalid type.")
+		if not isinstance(config["logfile"], str):
+			raise ValueError("Config key 'logfile' has invalid type.")
+		if not isinstance(config["cachefile"], str):
+			raise ValueError("Config key 'cachefile' has invalid type.")
+		if not isinstance(config["database"], str):
+			raise ValueError("Config key 'database' has invalid type.")
+		## Set config:
+		self.config = config
+	def mpd_connect (self):
+		if self.client is None:
+			self.client = mpd.MPDClient()
+		self.client.timeout = None
+		self.client.connect(self.config["mpd"]["host"], self.config["mpd"]["port"])
+		if self.config["mpd"]["password"] is not None:
+			self.client.password(self.config["mpd"]["password"])
+	def db_connect (self):
+		try:
+			self.db = pyodbc.connect(self.config["database"])
+			self.mode = 1
+		except Exception as e:
+			print(e)
+			## Database connection failed, try to use cache file:
+			try:
+				f = open(self.config["cachefile"], 'a')
+			except:
+				raise Exception("Couldn't connect to database or cachefile.")
+			else:
+				f.close()
+	def open_cache (self):
+		## Read from file:
+		f = open(self.config["cachefile"], 'r')
+		data = f.read()
+		f.close()
+		## Try to parse as JSON:
+		try:
+			data = json.loads(data)
+		except ValueError:
+			self.cache = []
+		else:
+			self.cache = data
+	def scrobble_cache (self):
+		if self.mode is not 1:
+			return
+		for song in self.cache:
+			self.scrobble_to_db(song)
+		self.cache = []
+		self.write_cache()
+	def write_cache (self):
+		try:
+			f = open(self.config["cachefile"], 'w')
+			f.write(json.dumps(self.cache))
+			f.close()
+		except Exception as e:
+			self.log("Error while writing cache: %s" % e)
 	def init_timer (self):
 		self.timer = threading.Timer(1., self.elapse)
 	def getstatus_state (self):
@@ -125,7 +213,7 @@ class StatsCollector (object):
 		print(msg, file=sys.stderr)
 	def wait (self):
 		self.client.idle("player")
-	def scrobble (self, song):
+	def scrobble_to_db (self, song):
 		cursor = self.db.cursor()
 		## Get last scrobbled song:
 		row = cursor.execute("""
@@ -175,6 +263,20 @@ class StatsCollector (object):
 		else:
 			self.log("Ignored %s" % str(song))
 		cursor.close()
+	def scrobble_to_cache (self, song):
+		self.cache.append(song)
+		self.write_cache()
+		self.log("Cached %s" % str(song))
+	def scrobble (self, song):
+		if self.mode is 1:
+			try:
+				self.scrobble_to_db(song)
+			except Exception as e:
+				self.log("Database error, switching to cachefile: %s" % e)
+				self.mode = 0
+				self.scrobble_to_cache(song)
+		else:
+			self.scrobble_to_cache(song)
 	def elapse (self):
 		self.elapsed += 1
 		if self.duration != 0 and self.elapsed > round(self.duration/2.) and self.songid != self.logged_songid:
@@ -207,14 +309,60 @@ class StatsCollector (object):
 		self.wait()
 
 if __name__ == "__main__":
-	c = StatsCollector(
-		config.database,
-		config.mpd_host,
-		config.mpd_port,
-		config.mpd_password
-	)
+	## Create StatsCollector class:
+	stats = StatsCollector()
+	## Parse command line arguments:
+	parser = argparse.ArgumentParser(description='Logger daemon for MPDstats')
+	parser.add_argument('-c', '--config', help="The config file to use.", required=True)
+	parser.add_argument('-p', '--profile', help="The profile to use.", required=True)
+	args = parser.parse_args()
+	## Try to open config file:
 	try:
-		while True:
-			c.run()
-	except KeyboardInterrupt:
-		sys.exit(0)
+		f = open(args.config, 'r')
+	except IOError as e:
+		## File not found / not readable:
+		print("Error while reading configuration: %s" % e, file=sys.stderr)
+		sys.exit(1)
+	## Try to load JSON from config file:
+	try:
+		js = json.loads(f.read())
+	except ValueError as e:
+		print("Error while reading configuration: %s" % e, file=sys.stderr)
+		sys.exit(1)
+	## Check if profile exists in config file:
+	if not args.profile in js:
+		print("Error while reading configuration: Profile '%s' not found." % args.profile)
+		sys.exit(1)
+	js = js[args.profile]
+	## Configuration seems okay, give it to StatsCollector:
+	try:
+		stats.set_config(js)
+	except ValueError as e:
+		print("Error while reading configuration: %s" % e, file=sys.stderr)
+		sys.exit(1)
+	## Connect to mpd:
+	try:
+		stats.mpd_connect()
+	except Exception as e:
+		print("Error while connecting to MPD: %s" % e, file=sys.stderr)
+		sys.exit(1)
+	## Connect to database:
+	try:
+		stats.db_connect()
+	except Exception as e:
+		print("Error while connecting to database: %s" % e, file=sys.stderr)
+		sys.exit(1)
+	## Read cachefile:
+	try:
+		stats.open_cache()
+	except Exception as e:
+		print("Error while reading cachefile: %s" % e, file=sys.stderr)
+		sys.exit(1)
+	## Scrobble cache:
+	try:
+		stats.scrobble_cache()
+	except Exception as e:
+		print("Error while scrobbling from cache: %s" % e, file=sys.stderr)
+	## Scrobble:
+	while True:
+		stats.run()

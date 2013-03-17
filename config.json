@@ -1,0 +1,22 @@
+{
+	"local": {
+		"database": "driver=mysql1;server=localhost;database=mpdstats;uid=root;pwd=password",
+		"mpd": {
+			"host": "127.0.0.1",
+			"port": 6600,
+			"password": null
+		},
+		"cachefile": "/tmp/mpdstats_local.cache",
+		"logfile": "/tmp/mpdstats_local.log"
+	},
+	"raspi": {
+		"database": "driver=mysql1;server=localhost;database=mpdstats;uid=root;pwd=password",
+		"mpd": {
+			"host": "172.16.1.2",
+			"port": 6600,
+			"password": null
+		},
+		"cachefile": "/tmp/mpdstats_local.cache",
+		"logfile": "/tmp/mpdstats_local.log"
+	}
+}

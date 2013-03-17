@@ -19,17 +19,18 @@
 #  MA 02110-1301, USA.
 #  
 #
-import time, sys
+import time, sys, os.path
 import libs.config as config
 import pyodbc
 from jinja2 import Template, FileSystemLoader
 from jinja2.environment import Environment
 
 if __name__ == "__main__":
+	maindir = os.path.dirname(sys.argv[0])
 	## Init template engine:
 	print("Initializing template engine...", file=sys.stderr)
 	env = Environment()
-	env.loader = FileSystemLoader("./templates")
+	env.loader = FileSystemLoader(maindir + "/templates")
 	print("Initializing template engine... DONE", file=sys.stderr)
 	## Open database connection:
 	print("Opening database connection...", file=sys.stderr)
@@ -117,7 +118,7 @@ if __name__ == "__main__":
 	## Load template:
 	tpl = env.get_template("index.html")
 	## ... and render it:
-	f = open("output/index.html", "w")
+	f = open(maindir + "/output/index.html", "w")
 	f.write(tpl.render(
 		date=time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime()),
 		artists=artists,
