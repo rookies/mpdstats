@@ -24,6 +24,9 @@ import libs.mpd as mpd
 import pyodbc
 
 class StatsCollector (object):
+	#################
+	### VARIABLES ###
+	#################
 	## Connections & general settings:
 	config = None
 	mode = 0 # 0=cachefile, 1=database
@@ -37,7 +40,9 @@ class StatsCollector (object):
 	elapsed = 0
 	duration = 0
 	song_fancy = None
-
+	#########################
+	### GENERAL FUNCTIONS ###
+	#########################
 	def __init__ (self):
 		self.init_timer()
 	def __del__ (self):
@@ -88,6 +93,43 @@ class StatsCollector (object):
 			raise ValueError("Config key 'database' has invalid type.")
 		## Set config:
 		self.config = config
+	def init_timer (self):
+		self.timer = threading.Timer(1., self.elapse)
+	def log (self, msg):
+		print(msg, file=sys.stderr)
+	def elapse (self):
+		self.elapsed += 1
+		if self.duration != 0 and self.elapsed > round(self.duration/2.) and self.songid != self.logged_songid:
+			self.scrobble(self.song_fancy)
+			self.logged_songid = self.songid
+		self.init_timer()
+		self.timer.start()
+	def run (self):
+		state = self.getstatus_state()
+		if state == "play":
+			self.log("Play state received.")
+			t = self.getstatus_time()
+			self.elapsed = t["elapsed"]
+			self.duration = t["duration"]
+			self.songid = self.getsong_id()
+			self.song_fancy = self.getsong_fancy()
+			self.timer.cancel()
+			self.init_timer()
+			self.timer.start()
+		elif state == "stop":
+			self.log("Stop state received.")
+			self.elapsed = 0
+			self.timer.cancel()
+		elif state == "pause":
+			self.log("Pause state received.")
+			self.elapsed = self.getstatus_time()["elapsed"]
+			self.songid = self.getsong_id()
+			self.song_fancy = self.getsong_fancy()
+			self.timer.cancel()
+		self.client.idle("player")
+	##################
+	### CONNECTORS ###
+	##################
 	def mpd_connect (self):
 		if self.client is None:
 			self.client = mpd.MPDClient()
@@ -108,6 +150,9 @@ class StatsCollector (object):
 				raise Exception("Couldn't connect to database or cachefile.")
 			else:
 				f.close()
+	#######################
+	### CACHE FUNCTIONS ###
+	#######################
 	def open_cache (self):
 		## Read from file:
 		f = open(self.config["cachefile"], 'r')
@@ -134,8 +179,9 @@ class StatsCollector (object):
 			f.close()
 		except Exception as e:
 			self.log("Error while writing cache: %s" % e)
-	def init_timer (self):
-		self.timer = threading.Timer(1., self.elapse)
+	############################
+	### MPD STATUS FUNCTIONS ###
+	############################
 	def getstatus_state (self):
 		## Get status:
 		res = self.client.status()
@@ -209,10 +255,9 @@ class StatsCollector (object):
 			ret["tracks"] = 0
 		## Return the result:
 		return ret
-	def log (self, msg):
-		print(msg, file=sys.stderr)
-	def wait (self):
-		self.client.idle("player")
+	##########################
+	### SCROBBLE FUNCTIONS ###
+	##########################
 	def scrobble_to_db (self, song):
 		cursor = self.db.cursor()
 		## Get last scrobbled song:
@@ -277,36 +322,6 @@ class StatsCollector (object):
 				self.scrobble_to_cache(song)
 		else:
 			self.scrobble_to_cache(song)
-	def elapse (self):
-		self.elapsed += 1
-		if self.duration != 0 and self.elapsed > round(self.duration/2.) and self.songid != self.logged_songid:
-			self.scrobble(self.song_fancy)
-			self.logged_songid = self.songid
-		self.init_timer()
-		self.timer.start()
-	def run (self):
-		state = self.getstatus_state()
-		if state == "play":
-			self.log("Play state received.")
-			t = self.getstatus_time()
-			self.elapsed = t["elapsed"]
-			self.duration = t["duration"]
-			self.songid = self.getsong_id()
-			self.song_fancy = self.getsong_fancy()
-			self.timer.cancel()
-			self.init_timer()
-			self.timer.start()
-		elif state == "stop":
-			self.log("Stop state received.")
-			self.elapsed = 0
-			self.timer.cancel()
-		elif state == "pause":
-			self.log("Pause state received.")
-			self.elapsed = self.getstatus_time()["elapsed"]
-			self.songid = self.getsong_id()
-			self.song_fancy = self.getsong_fancy()
-			self.timer.cancel()
-		self.wait()
 
 if __name__ == "__main__":
 	## Create StatsCollector class:
