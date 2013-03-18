@@ -20,6 +20,7 @@
 #  
 #
 import time, sys, os.path, argparse
+import libs.common as common
 import pyodbc
 from jinja2 import Template, FileSystemLoader
 from jinja2.environment import Environment
@@ -27,8 +28,12 @@ from jinja2.environment import Environment
 if __name__ == "__main__":
 	## Parse command line arguments:
 	parser = argparse.ArgumentParser(description='Logger daemon for MPDstats')
-	parser.add_argument('-d', '--database', help="The database string to use.", required=True)
+	parser.add_argument('-c', '--config', help="The config file to use.", required=True)
+	parser.add_argument('-p', '--profile', help="The profile to use.", required=True)
+	parser.add_argument('-o', '--output', help="The output directory.", required=True)
 	args = parser.parse_args()
+	## Get configuration:
+	config = common.read_config(args)
 	## Get maindir:
 	maindir = os.path.dirname(sys.argv[0])
 	## Init template engine:
@@ -38,7 +43,7 @@ if __name__ == "__main__":
 	print("Initializing template engine... DONE", file=sys.stderr)
 	## Open database connection:
 	print("Opening database connection...", file=sys.stderr)
-	db = pyodbc.connect(args.database)
+	db = pyodbc.connect(config["database"])
 	cursor = db.cursor()
 	print("Opening database connection... DONE", file=sys.stderr)
 	## === OVERVIEW ===
@@ -122,7 +127,7 @@ if __name__ == "__main__":
 	## Load template:
 	tpl = env.get_template("index.html")
 	## ... and render it:
-	f = open(maindir + "/output/index.html", "w")
+	f = open(args.output + "/index.html", "w")
 	f.write(tpl.render(
 		date=time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime()),
 		artists=artists,

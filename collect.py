@@ -21,6 +21,7 @@
 #
 import threading, time, json, argparse, sys
 import libs.mpd as mpd
+import libs.common as common
 import pyodbc
 
 class StatsCollector (object):
@@ -60,39 +61,6 @@ class StatsCollector (object):
 				self.db.close()
 			except:
 				pass
-	def set_config (self, config):
-		## Check existence of all config keys:
-		if not "mpd" in config:
-			raise ValueError("Config key 'mpd' not found.")
-		if not isinstance(config["mpd"], dict):
-			raise ValueError("Config key 'mpd' has invalid type.")
-		if not "port" in config["mpd"]:
-			raise ValueError("Config key 'mpd.port' not found.")
-		if not "host" in config["mpd"]:
-			raise ValueError("Config key 'mpd.host' not found.")
-		if not "password" in config["mpd"]:
-			raise ValueError("Config key 'mpd.password' not found.")
-		if not "logfile" in config:
-			raise ValueError("Config key 'logfile' not found.")
-		if not "cachefile" in config:
-			raise ValueError("Config key 'cachefile' not found.")
-		if not "database" in config:
-			raise ValueError("Config key 'database' not found.")
-		## Check types of all config keys:
-		if not isinstance(config["mpd"]["port"], int):
-			raise ValueError("Config key 'mpd.port' has invalid type.")
-		if not isinstance(config["mpd"]["host"], str):
-			raise ValueError("Config key 'mpd.host' has invalid type.")
-		if not isinstance(config["mpd"]["password"], str) and config["mpd"]["password"] is not None:
-			raise ValueError("Config key 'mpd.password' has invalid type.")
-		if not isinstance(config["logfile"], str):
-			raise ValueError("Config key 'logfile' has invalid type.")
-		if not isinstance(config["cachefile"], str):
-			raise ValueError("Config key 'cachefile' has invalid type.")
-		if not isinstance(config["database"], str):
-			raise ValueError("Config key 'database' has invalid type.")
-		## Set config:
-		self.config = config
 	def init_timer (self):
 		self.timer = threading.Timer(1., self.elapse)
 	def log (self, msg):
@@ -142,12 +110,11 @@ class StatsCollector (object):
 			self.db = pyodbc.connect(self.config["database"])
 			self.mode = 1
 		except Exception as e:
-			print(e)
 			## Database connection failed, try to use cache file:
 			try:
 				f = open(self.config["cachefile"], 'a')
 			except:
-				raise Exception("Couldn't connect to database or cachefile.")
+				raise Exception("Couldn't connect to database or cachefile. Database Error: %s" % e)
 			else:
 				f.close()
 	#######################
@@ -335,30 +302,8 @@ if __name__ == "__main__":
 	parser.add_argument('-c', '--config', help="The config file to use.", required=True)
 	parser.add_argument('-p', '--profile', help="The profile to use.", required=True)
 	args = parser.parse_args()
-	## Try to open config file:
-	try:
-		f = open(args.config, 'r')
-	except IOError as e:
-		## File not found / not readable:
-		print("Error while reading configuration: %s" % e, file=sys.stderr)
-		sys.exit(1)
-	## Try to load JSON from config file:
-	try:
-		js = json.loads(f.read())
-	except ValueError as e:
-		print("Error while reading configuration: %s" % e, file=sys.stderr)
-		sys.exit(1)
-	## Check if profile exists in config file:
-	if not args.profile in js:
-		print("Error while reading configuration: Profile '%s' not found." % args.profile)
-		sys.exit(1)
-	js = js[args.profile]
-	## Configuration seems okay, give it to StatsCollector:
-	try:
-		stats.set_config(js)
-	except ValueError as e:
-		print("Error while reading configuration: %s" % e, file=sys.stderr)
-		sys.exit(1)
+	## Get configuration:
+	stats.config = common.read_config(args)
 	## Connect to mpd:
 	try:
 		stats.mpd_connect()
