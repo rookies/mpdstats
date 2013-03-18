@@ -155,16 +155,20 @@ class StatsCollector (object):
 	#######################
 	def open_cache (self):
 		## Read from file:
-		f = open(self.config["cachefile"], 'r')
-		data = f.read()
-		f.close()
-		## Try to parse as JSON:
 		try:
-			data = json.loads(data)
-		except ValueError:
+			f = open(self.config["cachefile"], 'r')
+		except IOError:
 			self.cache = []
 		else:
-			self.cache = data
+			data = f.read()
+			f.close()
+			## Try to parse as JSON:
+			try:
+				data = json.loads(data)
+			except ValueError:
+				self.cache = []
+			else:
+				self.cache = data
 	def scrobble_cache (self):
 		if self.mode is not 1:
 			return
