@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-#  create.py
+#  common.py
 #  
 #  Copyright 2013 Robert Knauer <robert@privatdemail.net>
 #  

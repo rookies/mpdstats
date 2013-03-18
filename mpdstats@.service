@@ -1,0 +1,11 @@
+[Unit]
+Description=MPDstats collector daemon for profile %i
+After=mpd.service
+After=mysqld.service
+
+[Service]
+ExecStartPre=/home/robert/DEVELOPMENT/mpdstats/collect_pre.py -c /home/robert/DEVELOPMENT/mpdstats/config.json -p %i
+ExecStart=/home/robert/DEVELOPMENT/mpdstats/collect.py -c /home/robert/DEVELOPMENT/mpdstats/config.json -p %i
+
+[Install]
+WantedBy=multi-user.target
